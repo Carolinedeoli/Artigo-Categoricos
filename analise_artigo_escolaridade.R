@@ -25,45 +25,46 @@ library(patchwork)
 #                               FILTRAGEM 
 #===============================================================================
 
-enem_2023 <- read_csv("DADOS/ENEM_2023.csv")
-
-dados_concluintes <- enem_2023 %>% 
-  # Primeiro, filtramos as linhas (quem conclui após 2023)
-  filter(TP_ST_CONCLUSAO == 'Estou cursando e concluirei o Ensino Médio em 2023' & 
-         IN_TREINEIRO == 'Não') %>%
-  # Depois, selecionamos as colunas desejadas
-  select(desempenho, 
-         TP_SEXO,
-         TP_FAIXA_ETARIA,
-         TP_DEPENDENCIA_ADM_ESC,
-         TP_ESCOLA,
-         NU_NOTA_CN, 
-         NU_NOTA_CH, 
-         NU_NOTA_LC, 
-         NU_NOTA_MT, 
-         NU_NOTA_REDACAO, 
-         escolaridade_mae, 
-         renda_familiar)
+# enem_2023 <- read_csv("DADOS/ENEM_2023.csv")
+# 
+# dados_concluintes <- enem_2023 %>%
+#   # Primeiro, filtramos as linhas (quem conclui após 2023)
+#   filter(TP_ST_CONCLUSAO == 'Estou cursando e concluirei o Ensino Médio em 2023' &
+#          IN_TREINEIRO == 'Não') %>%
+#   # Depois, selecionamos as colunas desejadas
+#   select(desempenho,
+#          TP_SEXO,
+#          TP_FAIXA_ETARIA,
+#          TP_DEPENDENCIA_ADM_ESC,
+#          TP_ESCOLA,
+#          NU_NOTA_CN,
+#          NU_NOTA_CH,
+#          NU_NOTA_LC,
+#          NU_NOTA_MT,
+#          NU_NOTA_REDACAO,
+#          escolaridade_mae,
+#          renda_familiar)
 
 #write.csv(dados_concluintes, "CONCLUINTES_2023.csv", row.names = FALSE)
-
+dados_concluintes <- read_csv("Artigo escolaridade desempenho/CONCLUINTES_2023.csv")
+tabela_cruzada <- read_csv("Artigo escolaridade desempenho/tabela_cruzada.csv")
 dim(dados_concluintes)
-# 1. Calculamos os pontos de corte (vetor com Mínimo, Q1, Mediana, Q3 e Máximo)
-cortes <- quantile(dados_concluintes$desempenho, 
-                   probs = c(0, 0.25, 0.5, 0.75, 1), 
-                   na.rm = TRUE)
-
-# 2. Criamos a variável categorizando os alunos nesses intervalos
-dados_concluintes <- dados_concluintes %>%
-  mutate(setor_desempenho = cut(desempenho, 
-                                breaks = cortes, 
-                                include.lowest = TRUE,
-                                right = FALSE,
-                                labels = c("Baixo (até Q1)", 
-                                           "Médio-Baixo (Q1 a Mediana)", 
-                                           "Médio-Alto (Mediana a Q3)", 
-                                           "Alto (acima de Q3)")))
-
+# # 1. Calculamos os pontos de corte (vetor com Mínimo, Q1, Mediana, Q3 e Máximo)
+# cortes <- quantile(dados_concluintes$desempenho, 
+#                    probs = c(0, 0.25, 0.5, 0.75, 1), 
+#                    na.rm = TRUE)
+# 
+# # 2. Criamos a variável categorizando os alunos nesses intervalos
+# dados_concluintes <- dados_concluintes %>%
+#   mutate(setor_desempenho = cut(desempenho, 
+#                                 breaks = cortes, 
+#                                 include.lowest = TRUE,
+#                                 right = FALSE,
+#                                 labels = c("Baixo (até Q1)", 
+#                                            "Médio-Baixo (Q1 a Mediana)", 
+#                                            "Médio-Alto (Mediana a Q3)", 
+#                                            "Alto (acima de Q3)")))
+# 
 
 ##################################################################
 #Tabela de Notas Resumo
@@ -427,7 +428,7 @@ ggplot(tabela_cruzada, aes(x = escolaridade_mae, y = porcentagem, fill = setor_d
        fill = "Faixa de Desempenho") +
   theme_minimal()
 
-write.csv(tabela_cruzada, "tabela_cruzada.csv", row.names = FALSE)
+#write.csv(tabela_cruzada, "tabela_cruzada.csv", row.names = FALSE)
 
 sum(tabela_cruzada$n)
 
