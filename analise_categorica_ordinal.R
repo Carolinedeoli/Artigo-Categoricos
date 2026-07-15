@@ -24,18 +24,35 @@ library(vcd)
 #                 DADOS
 #===============================================================================
 
-dados_concluintes <- read_csv("Artigo escolaridade desempenho/CONCLUINTES_2023.csv")
-tabela_cruzada <- read_csv("Artigo escolaridade desempenho/tabela_cruzada.csv")
+
+dados_concluintes <- read_csv("Artigo-Categoricos/CONCLUINTES_2023.csv")
+# 1. Calculamos os pontos de corte (vetor com Mínimo, Q1, Mediana, Q3 e Máximo)
+cortes <- quantile(dados_concluintes$desempenho,
+                   probs = c(0, 0.25, 0.5, 0.75, 1),
+                   na.rm = TRUE)
+
+# 2. Criamos a variável categorizando os alunos nesses intervalos
+dados_concluintes <- dados_concluintes %>%
+  mutate(setor_desempenho = cut(desempenho,
+                                breaks = cortes,
+                                include.lowest = TRUE,
+                                right = FALSE,
+                                labels = c("Baixo (até Q1)",
+                                           "Médio-Baixo (Q1 a Mediana)",
+                                           "Médio-Alto (Mediana a Q3)",
+                                           "Alto (acima de Q3)")))
+
+
+tabela_cruzada <- read_csv("Artigo-Categoricos/tabela_cruzada.csv")
 
 # 1. Garantir a ordem lógica/ordinal das categorias
-tabela_cruzada$escolaridade_mae <- factor(
-  tabela_cruzada$escolaridade_mae, 
-  levels = c("Nunca estudou","Não completou EF (até 5º ano)", "EF incompleto (até 9º ano)", "EF completo", "Médio completo", "Superior completo","Pós-graduação"), 
-  ordered = TRUE
+dados_concluintes$escolaridade_mae <- factor(
+  dados_concluintes$escolaridade_mae, 
+  levels = c("Nunca estudou","Não completou EF (até 5º ano)", "EF incompleto (até 9º ano)", "EF completo", "Médio completo", "Superior completo","Pós-graduação")
 )
 
-tabela_cruzada$setor_desempenho <- factor(
-  tabela_cruzada$setor_desempenho, 
+dados_concluintes$setor_desempenho <- factor(
+  dados_concluintes$setor_desempenho, 
   levels = c("Baixo (até Q1)", "Médio-Baixo (Q1 a Mediana)", "Médio-Alto (Mediana a Q3)", "Alto (acima de Q3)"), 
   ordered = TRUE
 )
@@ -95,6 +112,19 @@ print(gama_res)
 GoodmanKruskalGamma(tab)
 assocstats(tab)
 
+
+# 1. Pega os valores que a função gerou
+gama_est <- gama_res$gamma
+gama_erro <- gama_res$sigma # O erro padrão fica salvo aqui
+
+# 2. Calcula a Estatística Z (Estimativa dividida pelo Erro Padrão)
+z_score <- gama_est / gama_erro
+
+# 3. Calcula o p-valor bi-caudal
+p_valor_gamma <- 2 * pnorm(-abs(z_score))
+
+# 4. Mostra o resultado formatado
+cat("O p-valor exato do Gamma é:", format(p_valor_gamma, scientific = TRUE), "\n")
 # CONCLUSÃO: Gama = 0.376 (IC95%: 0.374 a 0.378). Rejeita-se H0 (IC não inclui o 0).
 # Indica uma associação positiva moderada. Estudantes com mães de maior 
 # escolaridade têm probabilidade substancialmente maior de atingir quartis 
@@ -110,6 +140,16 @@ assocstats(tab)
 tau_b_res <- KendallTauB(tab, conf.level = 0.95)
 print(tau_b_res)
 
+# O cor.test exige os dados brutos como números
+teste_kendall_exato <- cor.test(
+  as.numeric(dados_concluintes$escolaridade_mae), 
+  as.numeric(dados_concluintes$desempenho), 
+  method = "kendall",
+  exact = FALSE # Usamos FALSE porque a base do ENEM é gigante
+)
+
+print(teste_kendall_exato)
+
 # CONCLUSÃO: Tau-b = 0.287 (IC95%: 0.286 a 0.289). Rejeita-se H0 (IC não inclui o 0).
 # Confirma a associação positiva. O valor é numericamente menor que o Gama porque
 # o Tau-b ajusta e penaliza a métrica pela grande quantidade de empates (ties) 
@@ -124,6 +164,41 @@ print(tau_b_res)
 # ==============================================================================
 
 
+
+# 1. Construindo o banco de dados com os resultados da sua saída
+tabela_associacao <- data.frame(
+  Teste = c(
+    "Qui-quadrado de Pearson",
+    "Mantel-Haenszel (Tendência Linear)",
+    "V de Cramér",
+    "Gamma de Goodman-Kruskal",
+    "Tau-b de Kendall"
+  ),
+  Objetivo = c(
+    "Independência Geral",
+    "Correlação Linear",
+    "Força da Associação",
+    "Associação Ordinal",
+    "Associação Ordinal"
+  ),
+  Estatistica = c("138.027", "117.317", "0,214", "0,380", "0,291"),
+  Graus_Liberdade = c("18", "1", "-", "-", "-"),
+  Significancia_IC = c("< 0,001", "< 0,001", "-", "[0,378; 0,382]", "[0,289; 0,292]")
+)
+
+# 2. Gerando o código LaTeX da tabela
+tabela_associacao %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    align = "llccc",
+    caption = "Testes de Independência e Associação entre Escolaridade da Mãe e Desempenho",
+    col.names = c("Teste Estatístico", "Objetivo", "Valor da Estatística", "gl", "Valor-p / IC 95%")
+  ) %>%
+  kable_styling(
+    latex_options = c("striped", "hold_position"),
+    full_width = FALSE
+  )
 ################################################################################
 
 ##          GRÁFICOS
@@ -265,3 +340,172 @@ ggplot(tab_prop,
     panel.grid = element_blank(),
     axis.text.x = element_text(angle = 30, hjust = 1)
   )
+
+
+#================================================================================
+
+## REGRESSAO ORDINAL
+
+#===============================================================================
+
+
+library(MASS)
+library(brant)
+
+# 2. Ajustando o modelo ordinal com ambas as variáveis fatores
+modelo_ord <- polr(setor_desempenho ~ escolaridade_mae, data = dados_concluintes, Hess = TRUE)
+summary(modelo_ord)
+
+# 3. Executando o Teste de Brant
+# (Esperamos p-valor > 0.05 pois geramos os dados sob paralelismo)
+brant(modelo_ord)
+
+
+#todos com probabilidade 0, ou seja não funcionou 
+
+
+
+library(VGAM)
+
+# Modelo apenas com as duas variáveis, relaxando o pressuposto de linhas paralelas
+modelo_vglm <- vglm(setor_desempenho ~ escolaridade_mae, 
+                    family = cumulative(parallel = FALSE), 
+                    data = dados_concluintes)
+
+summary(modelo_vglm)
+
+exp(confint(modelo_vglm))
+
+anova(modelo_ord, modelo_vglm)
+#===================================
+library(VGAM)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# 1. Criar uma base de dados sintética com as categorias únicas de escolaridade
+novos_dados <- data.frame(
+  escolaridade_mae = c("Nunca estudou", "Não completou EF (até 5º ano)", 
+                       "EF incompleto (até 9º ano)", "Médio completo", 
+                       "Superior completo", "Pós-graduação")
+)
+
+# Garantir a ordenação correta das categorias
+novos_dados$escolaridade_mae <- factor(
+  novos_dados$escolaridade_mae, 
+  levels = levels(dados_concluintes$escolaridade_mae)
+)
+
+# 2. Predizer as probabilidades para cada categoria individualmente
+# 2. Predizer as probabilidades para cada categoria individualmente (CORRIGIDO)
+predicoes <- predict(modelo_vglm, newdata = novos_dados, type = "response")
+
+# 3. Juntar as colunas das predições com os nomes das categorias
+dados_plot <- cbind(novos_dados, predicoes)
+
+# 4. Transformar para o formato longo (necessário para o ggplot2)
+dados_plot_longo <- dados_plot %>%
+  pivot_longer(
+    cols = -escolaridade_mae, 
+    names_to = "Desempenho", 
+    values_to = "Probabilidade"
+  )
+
+# Garantir que a legenda do desempenho respeite a ordem original do seu modelo
+dados_plot_longo$Desempenho <- factor(
+  dados_plot_longo$Desempenho,
+  levels = c("Baixo (até Q1)", "Médio-Baixo (Q1 a Mediana)", "Médio-Alto (Mediana a Q3)", "Alto (acima de Q3)")
+)
+
+# 5. GERAR O GRÁFICO DE CURVAS DE PROBABILIDADE (Como o da sua imagem)
+ggplot(dados_plot_longo, aes(x = escolaridade_mae, y = Probabilidade, color = Desempenho, group = Desempenho)) +
+  geom_line(size = 1.2) +      # Desenha as curvas contínuas para cada status de desempenho
+  geom_point(size = 3) +       # Adiciona os pontos exatos de cada categoria nas linhas
+  scale_color_manual(values = c(
+    "Baixo (até Q1)" = "#d9534f",             # Vermelho (Equivalente ao "Leve" da sua imagem)
+    "Médio-Baixo (Q1 a Mediana)" = "#f0ad4e",   # Laranja
+    "Médio-Alto (Mediana a Q3)" = "#337ab7",    # Azul (Equivalente ao "Moderada")
+    "Alto (acima de Q3)" = "#5cb85c"            # Verde (Equivalente ao "Severa")
+  )) +
+  labs(
+    title = "Curvas de Probabilidade: Modelo de Chances Não-Proporcionais",
+    subtitle = "Probabilidades estimadas via modelo não-proporcional (vglm)",
+    x = "Escolaridade da Mãe",
+    y = "Probabilidade Estimada",
+    color = "Faixa de Desempenho"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1, size = 10),
+    legend.position = "right",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 14, color = "#1a365d")
+  )
+
+# 5. Gerar o Gráfico de Barras Empilhadas (Excelente para Modelos Ordinais)
+ggplot(dados_plot_longo, aes(x = escolaridade_mae, y = Probabilidade, fill = Desempenho)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.7) +
+  scale_fill_brewer(palette = "RdYlBu") + # Paleta de cores do Vermelho (Baixo) ao Azul (Alto)
+  labs(
+    title = "Probabilidade Predita de Desempenho no ENEM por Escolaridade da Mãe",
+    subtitle = "Modelo de Odds Proporcionais Parciais (VGAM) - ENEM 2023",
+    x = "Escolaridade da Mãe",
+    y = "Probabilidade Acumulada",
+    fill = "Faixa de Desempenho"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+    legend.position = "bottom",
+    panel.grid.major.x = element_blank()
+  )
+
+
+
+## Obten??o de uma tabela-resumo completa
+
+gtsummary::tbl_regression(modelo_vglm, exponentiate = TRUE,
+                          estimate_fun = purrr::partial(style_ratio, digits = 3)) %>% 
+  gtsummary::add_global_p()
+
+#=====================================
+
+# 1. Modelo Ordinal com Liga ̧c~ao Probit
+mod_probit <- polr(setor_desempenho ~ escolaridade_mae, method = "probit",
+                   data = dados_concluintes, Hess = TRUE)
+
+# 2. Modelo Ordinal com Liga ̧c~ao Cloglog
+mod_cloglog <- polr(setor_desempenho ~ escolaridade_mae, method = "cloglog",
+                    data = dados_concluintes, Hess = TRUE)
+summary(mod_cloglog)
+# 3. Executando o Teste de Brant
+# (Esperamos p-valor > 0.05 pois geramos os dados sob paralelismo)
+brant(mod_probit)
+brant(mod_cloglog)
+
+AIC(modelo_ord, mod_probit, mod_cloglog)
+
+
+logLik(modelo_ord)
+logLik(modelo_vglm)
+
+gl <- length(coef(modelo_vglm)) - attr(logLik(modelo_ord), "df")
+LR <- 2 * (as.numeric(logLik(modelo_vglm)) -
+             as.numeric(logLik(modelo_ord)))
+
+pchisq(LR, df = gl, lower.tail = FALSE)
+
+mod_prop <- vglm(
+  setor_desempenho ~ escolaridade_mae,
+  family = cumulative(parallel = TRUE),
+  data = dados_concluintes
+)
+
+mod_nao <- vglm(
+  setor_desempenho ~ escolaridade_mae,
+  family = cumulative(parallel = FALSE),
+  data = dados_concluintes
+)
+
+VGAM::lrtest(mod_prop, modelo_vglm)
+anova(mod_prop, modelo_vglm, test = "LR")

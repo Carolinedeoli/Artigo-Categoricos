@@ -1,4 +1,4 @@
-
+/figures
 *.csv
 # History files
 .Rhistory
@@ -49,3 +49,4 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+.positai
