@@ -140,15 +140,15 @@ cat("O p-valor exato do Gamma é:", format(p_valor_gamma, scientific = TRUE), "\
 tau_b_res <- KendallTauB(tab, conf.level = 0.95)
 print(tau_b_res)
 
-# O cor.test exige os dados brutos como números
-teste_kendall_exato <- cor.test(
-  as.numeric(dados_concluintes$escolaridade_mae), 
-  as.numeric(dados_concluintes$desempenho), 
-  method = "kendall",
-  exact = FALSE # Usamos FALSE porque a base do ENEM é gigante
-)
-
-print(teste_kendall_exato)
+# # O cor.test exige os dados brutos como números
+# teste_kendall_exato <- cor.test(
+#   as.numeric(dados_concluintes$escolaridade_mae), 
+#   as.numeric(dados_concluintes$desempenho), 
+#   method = "kendall",
+#   exact = FALSE # Usamos FALSE porque a base do ENEM é gigante
+# )
+# 
+# print(teste_kendall_exato)
 
 # CONCLUSÃO: Tau-b = 0.287 (IC95%: 0.286 a 0.289). Rejeita-se H0 (IC não inclui o 0).
 # Confirma a associação positiva. O valor é numericamente menor que o Gama porque

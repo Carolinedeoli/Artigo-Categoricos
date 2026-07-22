@@ -55,8 +55,9 @@ dados_concluintes <- enem_2023 %>%
     escolaridade_mae,
     renda_familiar
   )
+dim(dados_concluintes)
 
-
+table(dados_concluintes$NU_NOTA_REDACAO)
 write.csv(dados_concluintes, "CONCLUINTES_2023.csv", row.names = FALSE)
 
 
